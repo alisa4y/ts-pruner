@@ -1,0 +1,37 @@
+{
+  "name": "ts-pruner",
+  "version": "1.0.0",
+  "description": "Prune function parameter types by examining the accessed properties of each parameter.",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "start": "node build/index.js",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "keywords": [
+    "typescript",
+    "type pruning",
+    "parameter types",
+    "accessed properties",
+    "type compression",
+    "type optimization",
+    "code reusability",
+    "type analysis",
+    "type checking",
+    "type safety",
+    "development tools",
+    "code efficiency"
+  ],
+  "author": "ali safari",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "bafu": "^1.1.3"
+  }
+}
