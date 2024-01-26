@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "declaration": true,
+    "target": "ES2022",
+    "outDir": "build",
+    "rootDir": "src",
+    "noImplicitAny": true,
+    "strict": true,
+    "removeComments": true,
+    "moduleResolution": "NodeNext"
+  },
+  "include": [
+    "src"
+  ]
+}

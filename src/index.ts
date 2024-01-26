@@ -1,0 +1,1 @@
+export { pruneFunction } from "./pruner"
