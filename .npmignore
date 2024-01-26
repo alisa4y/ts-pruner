@@ -1,7 +1,0 @@
-src/*
-test/*
-testcases/*
-.gitignore
-jest.config.js
-package-lock.json
-tsconfig.json
