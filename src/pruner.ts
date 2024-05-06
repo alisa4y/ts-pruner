@@ -101,7 +101,7 @@ function createNewParametersTypes(
         typeName,
         createPickExpression(
           typeChecker.typeToString(parameterType),
-          Array.from(props.values()).map(getName)
+          Array.from(props.values())
         )
       ),
     }
@@ -126,16 +126,12 @@ function createPickExpression(
   return factory.createTypeReferenceNode("Pick", [typeNode, unionTypeNode])
 }
 
-function getName(node: any): string {
-  return (node as any).propertyName?.getText() || (node as any).name.text
-}
-
 function getUsedPropsNodeOfParameters(
   fn: ts.FunctionDeclaration
-): Set<MemberType>[] {
+): Set<string>[] {
   if (!fn.body) return []
   return Array.from(fn.parameters.values()).map(p => {
-    const usedProperties: Set<MemberType> = new Set()
+    const usedProperties: Set<string> = new Set()
     const pName = p.name.getText()
     const addProp = (node: ts.Node) => {
       if (
@@ -143,7 +139,7 @@ function getUsedPropsNodeOfParameters(
         ts.isIdentifier(node.expression) &&
         node.expression.text === pName
       ) {
-        usedProperties.add(node)
+        usedProperties.add(getName(node))
       } else if (
         ts.isVariableDeclaration(node) &&
         node.initializer &&
@@ -153,7 +149,7 @@ function getUsedPropsNodeOfParameters(
       ) {
         for (const element of node.name.elements) {
           if (ts.isIdentifier(element.name)) {
-            usedProperties.add(element)
+            usedProperties.add(getName(element))
           }
         }
       }
@@ -165,6 +161,9 @@ function getUsedPropsNodeOfParameters(
       })
     return usedProperties
   })
+}
+function getName(node: any): string {
+  return (node as any).propertyName?.getText() || (node as any).name.text
 }
 
 // --------------------  tools  --------------------
