@@ -102,6 +102,41 @@ describe("pruner", () => {
       }`)
     )
   })
+  it("doing multiple pick", async () => {
+    const filename = join(process.cwd(), "./testcases/t3.ts")
+
+    expect(await format(pruneFunction("f1", filename))).toBe(
+      await format(`type A = {
+        a: number;
+        b: string;
+        c: boolean;
+      };
+      function f1(p: InF11): void {
+        console.log(p.a);
+        console.log(p.b);
+      }
+      type InF11 = Pick<A, "a" | "b">;
+      function f2(p: A): void {
+        const { a, b } = p;
+      }`)
+    )
+    expect(await format(pruneFunction("f2", filename))).toBe(
+      await format(`type A = {
+        a: number;
+        b: string;
+        c: boolean;
+      };
+      function f1(p: A): void {
+        console.log(p.a);
+        console.log(p.b);
+      }
+      function f2(p: InF21): void {
+        const { a, b } = p;
+      }
+      type InF21 = Pick<A, "a" | "b">;
+      `)
+    )
+  })
 })
 
 async function format(code: string | null): Promise<string> {
