@@ -13,9 +13,7 @@ describe("pruner", () => {
       function f1(p: InF11): void {
         console.log(p.a);
       }
-      type InF11 = {
-        a: number;
-      };
+      type InF11 = Pick<A, "a">;
       function f2(p: A): void {
         const { a } = p;
       }
@@ -39,9 +37,7 @@ describe("pruner", () => {
       function f2(p: InF21): void {
         const { a } = p;
       }
-      type InF21 = {
-        a: number;
-      };
+      type InF21 = Pick<A, "a">;
       function f3(p: A): void {
         const { a: num } = p;
       }`)
@@ -65,9 +61,7 @@ describe("pruner", () => {
       function f3(p: InF31): void {
         const { a: num } = p;
       }
-      type InF31 = {
-        a: number;
-      };`)
+      type InF31 = Pick<A, "a">;`)
     )
   })
 
@@ -82,9 +76,7 @@ describe("pruner", () => {
       function f1(s: string, n: number, b: boolean, p: InF14): void {
         console.log(p.a);
       }
-      type InF14 = {
-        a: number;
-      };
+      type InF14 = Pick<A, "a">;
       function f2(s: string, n: number, b: boolean, p: A): void {
         console.log(p.a);
         console.log(p.b);

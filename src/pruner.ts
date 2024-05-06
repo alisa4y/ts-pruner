@@ -99,15 +99,10 @@ function createNewParametersTypes(
       name: typeName,
       type: createTypeNode(
         typeName,
-        Array.from(props.values()).reduce((acc, node) => {
-          acc[getName(node)] = typeChecker.typeToTypeNode(
-            typeChecker.getTypeAtLocation(node),
-            undefined,
-            ts.NodeBuilderFlags.None
-          ) as ts.TypeNode
-
-          return acc
-        }, {} as PropertyTypes)
+        createPickExpression(
+          typeChecker.typeToString(parameterType),
+          Array.from(props.values()).map(getName)
+        )
       ),
     }
   })
@@ -115,15 +110,22 @@ function createNewParametersTypes(
 
 function createTypeNode(
   name: string,
-  type: PropertyTypes
+  type: ts.TypeReferenceNode
 ): ts.TypeAliasDeclaration {
-  const properties = Object.entries(type).map(([name, type]) =>
-    factory.createPropertySignature(undefined, name, undefined, type)
-  )
-
-  const typeNode = factory.createTypeLiteralNode(properties)
-  return factory.createTypeAliasDeclaration(undefined, name, [], typeNode)
+  return factory.createTypeAliasDeclaration(undefined, name, [], type)
 }
+function createPickExpression(
+  typeName: string,
+  fields: string[]
+): ts.TypeReferenceNode {
+  const typeNode = factory.createTypeReferenceNode(typeName, undefined)
+  const elements = fields.map(field =>
+    factory.createLiteralTypeNode(factory.createStringLiteral(field))
+  )
+  const unionTypeNode = factory.createUnionTypeNode(elements)
+  return factory.createTypeReferenceNode("Pick", [typeNode, unionTypeNode])
+}
+
 function getName(node: any): string {
   return (node as any).propertyName?.getText() || (node as any).name.text
 }
