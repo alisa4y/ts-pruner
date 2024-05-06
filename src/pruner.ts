@@ -1,5 +1,5 @@
 import * as ts from "typescript"
-import { curry } from "bafu"
+import { aim } from "bafu"
 import { join, dirname } from "path"
 
 const factory = ts.factory
@@ -20,7 +20,7 @@ export function pruneFunction(
 
   const newSource = sourceFile.statements.map(s => {
     if (ts.isFunctionDeclaration(s) && s.name?.text === functionName) {
-      const pi = getNewPrunedFunction(typechecker, s)
+      const pi = getNewPrunedFunction(s, typechecker)
       if (pi === null) return s
       return pi
     }
@@ -43,8 +43,8 @@ export function pruneFunction(
 }
 
 function getNewPrunedFunction(
-  typeChecker: ts.TypeChecker,
-  fnD: ts.FunctionDeclaration
+  fnD: ts.FunctionDeclaration,
+  typeChecker: ts.TypeChecker
 ): ts.Node[] | null {
   const newParametersTypes = createNewParametersTypes(fnD, typeChecker)
   if (newParametersTypes.filter(v => v !== null).length === 0) return null
@@ -76,84 +76,93 @@ function getNewPrunedFunction(
     ),
   ]
 }
+function createNewParametersTypes(
+  fnD: ts.FunctionDeclaration,
+  typeChecker: ts.TypeChecker
+): ({ name: string; type: ts.TypeAliasDeclaration } | null)[] {
+  if (fnD.name === undefined) return []
+  const funcName = fnD.name.text
+
+  const usedProps = getUsedPropsNodeOfParameters(fnD)
+  return Array.from(fnD.parameters.values()).map((p, i) => {
+    const props = usedProps[i]
+    if (props.size === 0) return null
+
+    const parameterType = typeChecker.getTypeAtLocation(p)
+    const members = typeChecker.getPropertiesOfType(parameterType)
+    if (props.size === members.length) return null
+
+    const typeName = `In${funcName[0].toUpperCase()}${funcName.slice(1)}${
+      i + 1
+    }`
+    return {
+      name: typeName,
+      type: createTypeNode(
+        typeName,
+        Array.from(props.values()).reduce((acc, node) => {
+          acc[getName(node)] = typeChecker.typeToTypeNode(
+            typeChecker.getTypeAtLocation(node),
+            undefined,
+            ts.NodeBuilderFlags.None
+          ) as ts.TypeNode
+
+          return acc
+        }, {} as PropertyTypes)
+      ),
+    }
+  })
+}
+
 function createTypeNode(
   name: string,
   type: PropertyTypes
 ): ts.TypeAliasDeclaration {
   const properties = Object.entries(type).map(([name, type]) =>
-    factory.createPropertySignature(
-      undefined,
-      name,
-      undefined,
-      factory.createTypeReferenceNode(type)
-    )
+    factory.createPropertySignature(undefined, name, undefined, type)
   )
 
   const typeNode = factory.createTypeLiteralNode(properties)
   return factory.createTypeAliasDeclaration(undefined, name, [], typeNode)
 }
-function createNewParametersTypes(
-  fnD: ts.FunctionDeclaration,
+function getName(node: any): string {
+  return (node as any).propertyName?.getText() || (node as any).name.text
+}
+
+// function getParameterInfo(
+//   parameter: ts.ParameterDeclaration,
+//   typeChecker: ts.TypeChecker
+// ): PropertyTypes | null {
+//   const parameterType = typeChecker.getTypeAtLocation(parameter)
+//   return getPropertyTypes(typeChecker, parameterType)
+// }
+
+// function getPropertyTypes(
+//   typeChecker: ts.TypeChecker,
+//   type: ts.Type
+// ): PropertyTypes | null {
+//   if (!type || !type.symbol || !type.symbol.members) {
+//     return null
+//   }
+
+//   return Array.from(type.symbol.members.entries()).reduce(
+//     (types, [propertyName, propertySymbol]) => {
+//       const propertyType = typeChecker.typeToString(
+//         typeChecker.getTypeOfSymbolAtLocation(
+//           propertySymbol,
+//           propertySymbol.valueDeclaration!
+//         )
+//       )
+//       types[propertyName.toString()] = propertyType
+//       return types
+//     },
+//     {} as PropertyTypes
+//   )
+// }
+
+function getUsedPropsOfParameters(
+  fn: ts.FunctionDeclaration,
   typeChecker: ts.TypeChecker
-): ({ name: string; type: ts.TypeAliasDeclaration } | null)[] {
-  const getParamInfo = curry(getParameterInfo, typeChecker)
-  const ps = fnD.parameters.map(getParamInfo)
-  if (fnD.name === undefined) return []
-  const funcName = fnD.name.text
-  const usedProps = getUsedPropsOfParameters(fnD)
-  return ps.map((info, i) => {
-    if (info === null) return null
-    const keys = Object.keys(info)
-    if (keys.length > usedProps[i].size) {
-      const typeName = `In${funcName[0].toUpperCase()}${funcName.slice(1)}${
-        i + 1
-      }`
-      return {
-        name: typeName,
-        type: createTypeNode(
-          typeName,
-          Array.from(usedProps[i].values()).reduce((type, key) => {
-            type[key] = info[key]
-            return type
-          }, {} as PropertyTypes)
-        ),
-      }
-    }
-    return null
-  })
-}
-function getParameterInfo(
-  typeChecker: ts.TypeChecker,
-  parameter: ts.ParameterDeclaration
-): PropertyTypes | null {
-  const parameterType = typeChecker.getTypeAtLocation(parameter)
-  return getPropertyTypes(typeChecker, parameterType)
-}
-
-function getPropertyTypes(
-  typeChecker: ts.TypeChecker,
-  type: ts.Type
-): PropertyTypes | null {
-  if (!type || !type.symbol || !type.symbol.members) {
-    return null
-  }
-
-  return Array.from(type.symbol.members.entries()).reduce(
-    (types, [propertyName, propertySymbol]) => {
-      const propertyType = typeChecker.typeToString(
-        typeChecker.getTypeOfSymbolAtLocation(
-          propertySymbol,
-          propertySymbol.valueDeclaration!
-        )
-      )
-      types[propertyName.toString()] = propertyType
-      return types
-    },
-    {} as PropertyTypes
-  )
-}
-
-function getUsedPropsOfParameters(fn: ts.FunctionDeclaration): Set<string>[] {
+): Set<string>[] {
   if (!fn.body) return []
   return Array.from(fn.parameters.values()).map(p => {
     const usedProperties: Set<string> = new Set()
@@ -165,6 +174,7 @@ function getUsedPropsOfParameters(fn: ts.FunctionDeclaration): Set<string>[] {
         node.expression.text === pName
       ) {
         // Check if the property access is on the 'person' parameter
+        const t = typeChecker.getTypeAtLocation(node)
         usedProperties.add(node.name.text)
       } else if (
         ts.isVariableDeclaration(node) &&
@@ -190,11 +200,49 @@ function getUsedPropsOfParameters(fn: ts.FunctionDeclaration): Set<string>[] {
     return usedProperties
   })
 }
+function getUsedPropsNodeOfParameters(
+  fn: ts.FunctionDeclaration
+): Set<MemberType>[] {
+  if (!fn.body) return []
+  return Array.from(fn.parameters.values()).map(p => {
+    const usedProperties: Set<MemberType> = new Set()
+    const pName = p.name.getText()
+    const addProp = (node: ts.Node) => {
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === pName
+      ) {
+        usedProperties.add(node)
+      } else if (
+        ts.isVariableDeclaration(node) &&
+        node.initializer &&
+        ts.isIdentifier(node.initializer) &&
+        node.initializer.text === pName &&
+        ts.isObjectBindingPattern(node.name)
+      ) {
+        for (const element of node.name.elements) {
+          if (ts.isIdentifier(element.name)) {
+            usedProperties.add(element)
+          }
+        }
+      }
+      ts.forEachChild(node, addProp)
+    }
+    if (fn.body !== undefined)
+      ts.forEachChild(fn.body, node => {
+        addProp(node)
+      })
+    return usedProperties
+  })
+}
+
 // --------------------  tools  --------------------
 function notNull<T>(v: T | null): v is T {
   return v !== null
 }
 // --------------------  types  --------------------
-interface PropertyTypes {
-  [name: string]: string
+type PropertyTypes = {
+  [k: string]: ts.TypeNode
 }
+type MemberType = ts.PropertyAccessExpression | ts.BindingElement
