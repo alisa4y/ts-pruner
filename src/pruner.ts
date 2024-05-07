@@ -41,7 +41,6 @@ export function pruneFunction(
     )
     .join("\n")
 }
-
 function getNewPrunedFunction(
   fnD: ts.FunctionDeclaration,
   typeChecker: ts.TypeChecker
@@ -76,6 +75,7 @@ function getNewPrunedFunction(
     ),
   ]
 }
+// --------------------  make new type for paramters  --------------------
 function createNewParametersTypes(
   fnD: ts.FunctionDeclaration,
   typeChecker: ts.TypeChecker
@@ -84,7 +84,9 @@ function createNewParametersTypes(
   const funcName = fnD.name.text
 
   const usedProps = getUsedPropsNodeOfParameters(fnD)
+  const passedParams = getPassedParams(fnD)
   return Array.from(fnD.parameters.values()).map((p, i) => {
+    if (passedParams.has(p.name.getText())) return null
     const props = usedProps[i]
     if (props.size === 0) return null
 
@@ -107,7 +109,6 @@ function createNewParametersTypes(
     }
   })
 }
-
 function createTypeNode(
   name: string,
   type: ts.TypeReferenceNode
@@ -125,47 +126,76 @@ function createPickExpression(
   const unionTypeNode = factory.createUnionTypeNode(elements)
   return factory.createTypeReferenceNode("Pick", [typeNode, unionTypeNode])
 }
-
+// --------------------  get properties used inside function  --------------------
 function getUsedPropsNodeOfParameters(
   fn: ts.FunctionDeclaration
 ): Set<string>[] {
-  if (!fn.body) return []
-  return Array.from(fn.parameters.values()).map(p => {
-    const usedProperties: Set<string> = new Set()
-    const pName = p.name.getText()
-    const addProp = (node: ts.Node) => {
-      if (
-        ts.isPropertyAccessExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === pName
-      ) {
-        usedProperties.add(getName(node))
-      } else if (
-        ts.isVariableDeclaration(node) &&
-        node.initializer &&
-        ts.isIdentifier(node.initializer) &&
-        node.initializer.text === pName &&
-        ts.isObjectBindingPattern(node.name)
-      ) {
-        for (const element of node.name.elements) {
-          if (ts.isIdentifier(element.name)) {
-            usedProperties.add(getName(element))
-          }
-        }
+  const { body } = fn
+  if (body === undefined) return []
+  return Array.from(fn.parameters.values()).map(p =>
+    getAccessedProperties(p.name.getText(), body)
+  )
+}
+function getAccessedProperties(
+  paramName: string,
+  node: ts.Node,
+  usedProps: Set<string> = new Set()
+): Set<string> {
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === paramName
+  ) {
+    usedProps.add(getName(node))
+  } else if (
+    ts.isVariableDeclaration(node) &&
+    node.initializer &&
+    ts.isIdentifier(node.initializer) &&
+    node.initializer.text === paramName &&
+    ts.isObjectBindingPattern(node.name)
+  ) {
+    for (const element of node.name.elements) {
+      if (ts.isIdentifier(element.name)) {
+        usedProps.add(getName(element))
       }
-      ts.forEachChild(node, addProp)
     }
-    if (fn.body !== undefined)
-      ts.forEachChild(fn.body, node => {
-        addProp(node)
-      })
-    return usedProperties
-  })
+  }
+  node
+    .getChildren()
+    .forEach(n => getAccessedProperties(paramName, n, usedProps))
+  return usedProps
 }
 function getName(node: any): string {
   return (node as any).propertyName?.getText() || (node as any).name.text
 }
+// --------------------  get whole paramteres passed  --------------------
+function getPassedParams(fn: ts.FunctionDeclaration): Set<string> {
+  let usedParams: Set<string> = new Set()
+  const { body } = fn
+  if (body === undefined) return usedParams
+  Array.from(fn.parameters.values()).map(p => {
+    const paramName = p.name.getText()
+    if (isParamUsed(paramName, body)) usedParams.add(paramName)
+  })
 
+  return usedParams
+}
+function isParamUsed(paramName: string, node: ts.Node): boolean {
+  if (ts.isCallExpression(node)) {
+    node.arguments.forEach(arg => {
+      if (
+        ts.isIdentifier(arg) &&
+        arg.text === paramName &&
+        !ts.isPropertyAccessExpression(node)
+      ) {
+        return true
+      }
+    })
+  }
+  let result = false
+  node.getChildren().forEach(n => (result = isParamUsed(paramName, n)))
+  return result
+}
 // --------------------  tools  --------------------
 function notNull<T>(v: T | null): v is T {
   return v !== null

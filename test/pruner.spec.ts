@@ -102,7 +102,7 @@ describe("pruner", () => {
       }`)
     )
   })
-  it("doing multiple pick on multiple access or initializing", async () => {
+  it("only picks each field once on multiple access or initializing", async () => {
     const filename = join(process.cwd(), "./testcases/t3.ts")
 
     expect(await format(pruneFunction("f1", filename))).toBe(
@@ -170,6 +170,69 @@ describe("pruner", () => {
         console.log(p.b);
       }
       type InF31 = Pick<A, "a" | "b">;
+      `)
+    )
+  })
+  it("won't create a type when a whole object is passed to another function", async () => {
+    const filename = join(process.cwd(), "./testcases/t4.ts")
+
+    expect(await format(pruneFunction("f1", filename))).toBe(
+      await format(`type A = {
+        a: number;
+        b: string;
+      };
+      type B = {
+        a: number;
+        b: string;
+      };
+      function f1(p: A, p2: InF12): void {
+        console.log(p);
+        console.log(p2.a);
+      }
+      type InF12 = Pick<B, "a">;
+      function f2(p: A, p2: B): void {
+        const { b } = p;
+        console.log(p2.a);
+      }`)
+    )
+  })
+  it("create multiple types for multiple object parameters", async () => {
+    const filename = join(process.cwd(), "./testcases/t4.ts")
+
+    expect(await format(pruneFunction("f2", filename))).toBe(
+      await format(`type A = {
+        a: number;
+        b: string;
+      };
+      type B = {
+        a: number;
+        b: string;
+      };
+      function f1(p: A, p2: B): void {
+        console.log(p);
+        console.log(p2.a);
+      }
+      function f2(p: InF21, p2: InF22): void {
+        const { b } = p;
+        console.log(p2.a);
+      }
+      type InF21 = Pick<A, "b">;
+      type InF22 = Pick<B, "a">;
+      `)
+    )
+  })
+  it("detect assign expression and create a type for that", async () => {
+    const filename = join(process.cwd(), "./testcases/t5.ts")
+
+    expect(await format(pruneFunction("f1", filename))).toBe(
+      await format(`type A = {
+        a: number;
+        b: string;
+      };
+      function f1(p: InF11): void {
+        p.a = 10;
+      }
+      type InF11 = Pick<A, "a">;
       `)
     )
   })
