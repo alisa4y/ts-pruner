@@ -1,6 +1,5 @@
 import * as ts from "typescript"
-import { aim } from "bafu"
-import { join, dirname } from "path"
+import { join } from "path"
 
 const factory = ts.factory
 
